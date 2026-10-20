@@ -1,5 +1,15 @@
 # @vercel/agent-eval
 
+## 2.6.0
+
+### Minor Changes
+
+- [#207](https://github.com/vercel-labs/agent-eval/pull/207) [`5c0bd8a`](https://github.com/vercel-labs/agent-eval/commit/5c0bd8a4e3bf05a83a4a0cfc1292c65a27923f49) Thanks [@paoloricciuti](https://github.com/paoloricciuti)! - feat: add `pi` coding agent
+
+### Patch Changes
+
+- [#207](https://github.com/vercel-labs/agent-eval/pull/207) [`75e4438`](https://github.com/vercel-labs/agent-eval/commit/75e44387e889c83b6c2b2026da17bbdc244a4577) Thanks [@paoloricciuti](https://github.com/paoloricciuti)! - fix: stop applying the codegen agent's `agentOptions` to a pinned judge that uses a different agent
+
 ## 2.5.0
 
 ### Minor Changes
