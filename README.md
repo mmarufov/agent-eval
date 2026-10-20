@@ -227,7 +227,7 @@ const config: ExperimentConfig = {
 ```
 
 - `judge.model` is required (pinning the model is the point).
-- `judge.agent` is optional and defaults to the codegen agent — omit it to keep the same harness and only pin the model. When it names a different agent, that agent's CLI is installed in the sandbox automatically and its key is resolved from its own env var (falling back to `VERCEL_OIDC_TOKEN`).
+- `judge.agent` is optional and defaults to the codegen agent — omit it to keep the same harness and only pin the model. When it names a different agent, that agent's CLI is installed in the sandbox automatically and its key is resolved from its own env var (falling back to `VERCEL_OIDC_TOKEN`). `agentOptions` belong to the codegen agent and are not applied to a different judge agent, which runs with its defaults.
 - Pinning changes the eval fingerprint, so a pinned run won't reuse self-graded cached results.
 
 **TypeScript support is built in.** Importing from `@vercel/agent-eval/eval` types the `environment`/`transcript` subjects _and_ registers the `toSatisfyCriterion` / `toScoreAtLeast` matchers on Vitest's `expect` — no manual `declare module 'vitest'` augmentation needed. The package also re-exports the `JudgeSubject` and `JudgeVerdict` types for advanced use.
@@ -568,6 +568,10 @@ agentOptions: {
 Pin the installed CLI with `agentOptions.cliPackage` (for example
 `'@earendil-works/pi-coding-agent@0.99.1'`). PI has no web tools, so
 `webResearch` has no effect on it.
+
+The eval workspace is treated as a trusted PI project, so caller-installed
+project skills (`.agents/skills`, `.pi/skills`) and `.pi/` settings load even
+though `--mode json` cannot show PI's trust prompt.
 
 ### Response-only evals
 

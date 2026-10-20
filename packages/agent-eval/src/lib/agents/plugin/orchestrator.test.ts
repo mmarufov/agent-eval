@@ -68,6 +68,27 @@ describe('resolveJudgeRuntime', () => {
     expect(rt.config.disableBundledSkills).toBe(true);
   });
 
+  it("keeps the codegen agent's agentOptions out of a different judge agent's setup", () => {
+    process.env.AI_GATEWAY_API_KEY = 'judge-gateway-key';
+    const pi = getAgent('vercel-ai-gateway/pi-coding-agent').definition;
+    const claudeJudge = resolveJudgeRuntime(pi, {
+      ...baseOptions,
+      agentOptions: { cliPackage: '@earendil-works/pi-coding-agent@1.3.0' },
+      judge: { agent: 'vercel-ai-gateway/claude-code', model: 'claude-opus-4-8' },
+    });
+    const claudeInstall = claudeJudge.judgeDef.install(claudeJudge.judgeOptions);
+    expect(claudeInstall[1].args).toEqual(['install', '-g', '@anthropic-ai/claude-code']);
+
+    const opencode = getAgent('vercel-ai-gateway/opencode').definition;
+    const piJudge = resolveJudgeRuntime(opencode, {
+      ...baseOptions,
+      agentOptions: { extraProviders: { vercel: { options: { timeout: 1 } } } },
+      judge: { agent: 'vercel-ai-gateway/pi-coding-agent', model: 'anthropic/claude-sonnet-4.5' },
+    });
+    const piConfig = piJudge.judgeDef.configFiles(piJudge.judgeOptions).map((file) => file.viaShell ?? '');
+    expect(piConfig.some((script) => script.includes('models.json'))).toBe(false);
+  });
+
   it('rejects a pinned judge that cannot disable bundled skills', () => {
     const codegen = getAgent('vercel-ai-gateway/claude-code').definition;
     expect(() =>

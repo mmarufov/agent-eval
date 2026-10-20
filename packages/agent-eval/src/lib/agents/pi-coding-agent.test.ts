@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 // Pure transcript/observed-model helpers live in the in-sandbox runner (so the
@@ -74,19 +75,59 @@ describe('createPiCodingAgentDefinition', () => {
     expect(steps[1].args).toEqual(['install', '-g', '@earendil-works/pi-coding-agent@0.99.1']);
   });
 
-  it('writes no config by default', () => {
-    expect(definition.configFiles(runOptions())).toEqual([]);
+  /** Run the config scripts the way the sandbox does, against a throwaway HOME. */
+  function writeConfigIntoHome(options: AgentRunOptions, existingSettings?: Record<string, unknown>): string {
+    const home = mkdtempSync(join(tmpdir(), 'fake-pi-home-'));
+    if (existingSettings) {
+      mkdirSync(join(home, '.pi/agent'), { recursive: true });
+      writeFileSync(join(home, '.pi/agent/settings.json'), JSON.stringify(existingSettings));
+    }
+    for (const file of definition.configFiles(options)) {
+      execFileSync('bash', ['-c', file.viaShell!], { env: { ...process.env, HOME: home } });
+    }
+    return home;
+  }
+
+  it('trusts the eval workspace so PI loads caller-installed project skills in JSON mode', () => {
+    const home = writeConfigIntoHome(runOptions());
+    try {
+      expect(JSON.parse(readFileSync(join(home, '.pi/agent/settings.json'), 'utf8'))).toEqual({
+        defaultProjectTrust: 'always',
+      });
+      expect(existsSync(join(home, '.pi/agent/models.json'))).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps PI settings a setup hook already wrote, including an explicit trust choice', () => {
+    const custom = writeConfigIntoHome(runOptions(), { defaultTools: ['read', 'bash'] });
+    const explicit = writeConfigIntoHome(runOptions(), { defaultProjectTrust: 'never' });
+    try {
+      expect(JSON.parse(readFileSync(join(custom, '.pi/agent/settings.json'), 'utf8'))).toEqual({
+        defaultTools: ['read', 'bash'],
+        defaultProjectTrust: 'always',
+      });
+      expect(JSON.parse(readFileSync(join(explicit, '.pi/agent/settings.json'), 'utf8'))).toEqual({
+        defaultProjectTrust: 'never',
+      });
+    } finally {
+      rmSync(custom, { recursive: true, force: true });
+      rmSync(explicit, { recursive: true, force: true });
+    }
   });
 
   it('writes extra providers to PI models.json without the credential', () => {
-    const options = runOptions({
-      agentOptions: { extraProviders: { 'vercel-ai-gateway': { models: [{ id: 'vendor/unreleased-model' }] } } },
-    });
-    const [file] = definition.configFiles(options);
-
-    expect(file.viaShell).toContain('~/.pi/agent/models.json');
-    expect(file.viaShell).toContain('"vendor/unreleased-model"');
-    expect(file.viaShell).not.toContain(options.apiKey);
+    const extraProviders = { 'vercel-ai-gateway': { models: [{ id: 'vendor/unreleased-model' }] } };
+    const options = runOptions({ agentOptions: { extraProviders } });
+    const home = writeConfigIntoHome(options);
+    try {
+      const models = readFileSync(join(home, '.pi/agent/models.json'), 'utf8');
+      expect(JSON.parse(models)).toEqual({ providers: extraProviders });
+      expect(models).not.toContain(options.apiKey);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it('threads thinking to the runner through extra (the judge ships no agentOptions)', () => {

@@ -135,7 +135,10 @@ export function resolveJudgeRuntime(def: AgentDefinition, options: AgentRunOptio
   assertBundledSkillsControl(judgeDef, options.disableBundledSkills);
   assertCrossAgentJudgeSupport(judgeDef);
   const judgeApiKey = resolveAgentApiKey(judgeDef.getApiKeyEnvVar) ?? '';
-  const judgeOptions: AgentRunOptions = { ...options, model: spec.model, apiKey: judgeApiKey };
+  // agentOptions belong to the codegen agent. Agents share option names with
+  // different meanings (cliPackage, extraProviders), so a different judge agent
+  // must not install or configure itself from them.
+  const judgeOptions: AgentRunOptions = { ...options, model: spec.model, apiKey: judgeApiKey, agentOptions: undefined };
   return {
     judgeDef,
     judgeOptions,

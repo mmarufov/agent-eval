@@ -68,6 +68,23 @@ function writePiAgentFile(file: string, content: string): ConfigFile {
 }
 
 /**
+ * Default PI's global `defaultProjectTrust` to "always", merged into any
+ * settings.json a setup hook already wrote (an explicit trust choice wins).
+ */
+const TRUST_EVAL_WORKSPACE: ConfigFile = {
+  viaShell: `node - << 'PI_SETTINGS_EOF'
+const fs = require('node:fs');
+const path = require('node:path');
+const file = path.join(require('node:os').homedir(), '.pi/agent/settings.json');
+let settings = {};
+try { settings = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+settings.defaultProjectTrust ??= 'always';
+fs.mkdirSync(path.dirname(file), { recursive: true });
+fs.writeFileSync(file, JSON.stringify(settings, null, 2));
+PI_SETTINGS_EOF`,
+};
+
+/**
  * Build the PI plugin definition.
  *
  * getApiKeyEnvVar() and authEnv() agree on AI_GATEWAY_API_KEY, so the host's key
@@ -99,11 +116,14 @@ export function createPiCodingAgentDefinition(): AgentDefinition {
       ];
     },
 
-    // The gateway provider needs no config. Extra providers go to PI's global
-    // agent dir, which stays out of the workspace (and so out of the captured diff).
+    // The gateway provider needs no config. Everything goes to PI's global agent
+    // dir, which stays out of the workspace (and so out of the captured diff).
     configFiles(options: AgentRunOptions): ConfigFile[] {
       const piOptions = options.agentOptions as PiAgentOptions | undefined;
-      const files: ConfigFile[] = [];
+      // PI (>= 0.79) only loads project skills and settings (.agents/skills, .pi/*)
+      // from a trusted folder, and JSON mode cannot prompt, so it would silently
+      // skip caller-installed skills. The sandbox and its workspace are the eval's own.
+      const files: ConfigFile[] = [TRUST_EVAL_WORKSPACE];
       const models = generatePiModelsConfig(piOptions?.extraProviders);
       if (models) files.push(writePiAgentFile('models.json', models));
       return files;
