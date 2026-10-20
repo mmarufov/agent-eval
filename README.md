@@ -228,7 +228,7 @@ const config: ExperimentConfig = {
 ```
 
 - `judge.model` is required (pinning the model is the point).
-- `judge.agent` is optional and defaults to the codegen agent — omit it to keep the same harness and only pin the model. When it names a different agent, that agent's CLI is installed in the sandbox automatically and its key is resolved from its own env var (falling back to `VERCEL_OIDC_TOKEN`).
+- `judge.agent` is optional and defaults to the codegen agent — omit it to keep the same harness and only pin the model. When it names a different agent, that agent's CLI is installed in the sandbox automatically and its key is resolved from its own env var (falling back to `VERCEL_OIDC_TOKEN`). `agentOptions` belong to the codegen agent and are not applied to a different judge agent, which runs with its defaults.
 - Pinning changes the eval fingerprint, so a pinned run won't reuse self-graded cached results.
 
 **TypeScript support is built in.** Importing from `@vercel/agent-eval/eval` types the `environment`/`transcript` subjects _and_ registers the `toSatisfyCriterion` / `toScoreAtLeast` matchers on Vitest's `expect` — no manual `declare module 'vitest'` augmentation needed. The package also re-exports the `JudgeSubject` and `JudgeVerdict` types for advanced use.
@@ -344,6 +344,7 @@ agent: 'vercel-ai-gateway/claude-code'  // Claude Code via AI Gateway
 agent: 'vercel-ai-gateway/codex'        // OpenAI Codex via AI Gateway
 agent: 'vercel-ai-gateway/opencode'     // OpenCode via AI Gateway
 agent: 'vercel-ai-gateway/fx'           // fx via AI Gateway (research runs)
+agent: 'vercel-ai-gateway/pi-coding-agent' // PI coding agent via AI Gateway
 
 // Direct API (uses provider keys directly)
 agent: 'claude-code'  // requires ANTHROPIC_API_KEY
@@ -608,6 +609,49 @@ When the prefix was added automatically, `observedModel` is reported back in
 the request's namespace (`anthropic/claude-sonnet-4`), so requested-vs-observed
 comparisons hold. Models targeting a provider configured via
 `agentOptions.extraProviders` are passed verbatim.
+
+### PI coding agent
+
+[PI](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent)
+(`@earendil-works/pi-coding-agent`) runs like every other built-in agent: the `pi`
+CLI is installed and invoked inside the sandbox with the eval workspace as its
+cwd, and its JSON event stream becomes the transcript. Results, `results.json`
+assertions, the agentic judge and the Playground all work unchanged.
+
+Like OpenCode, PI only runs through the Vercel AI Gateway, so models use gateway
+ids:
+
+```typescript
+const config: ExperimentConfig = {
+  agent: 'vercel-ai-gateway/pi-coding-agent', // requires AI_GATEWAY_API_KEY
+  model: 'anthropic/claude-sonnet-4.5',
+  agentOptions: {
+    thinking: 'high', // optional: off | minimal | low | medium | high | xhigh
+  },
+};
+```
+
+`agentOptions.extraProviders` is written verbatim to PI's
+[`models.json`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/models.md)
+inside the sandbox. Runs always use PI's `vercel-ai-gateway` provider, so use it
+to extend that provider, for example with a gateway model PI's built-in catalog
+does not list yet:
+
+```typescript
+agentOptions: {
+  extraProviders: {
+    'vercel-ai-gateway': { models: [{ id: 'vendor/unreleased-model' }] },
+  },
+},
+```
+
+Pin the installed CLI with `agentOptions.cliPackage` (for example
+`'@earendil-works/pi-coding-agent@0.99.1'`). PI has no web tools, so
+`webResearch` has no effect on it.
+
+The eval workspace is treated as a trusted PI project, so caller-installed
+project skills (`.agents/skills`, `.pi/skills`) and `.pi/` settings load even
+though `--mode json` cannot show PI's trust prompt.
 
 ### Response-only evals
 
